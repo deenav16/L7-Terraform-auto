@@ -1,0 +1,141 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - prometheus  # Optional: For Grafana visualization
+  - node-exporter  # Optional: For Grafana visualization
+  - grafana  # Optional: For Grafana visualization
+
+# --- Grafana Configuration (Optional) ---
+# Keep this section ONLY if you want to use Grafana for visualization
+# in *addition* to Azure Monitor's alerting. Azure Monitor handles
+# the alerting; Grafana is just for viewing the metrics.
+write_files:
+  - path: /etc/grafana/provisioning/datasources/datasources.yaml
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://localhost:9090
+          access: proxy
+          isDefault: true
+
+  - path: /var/lib/grafana/dashboards/dashboard.json
+    content: |
+      {
+        "annotations": {
+          "list": [
+            {
+              "builtIn": 1,
+              "datasource": {
+                "type": "grafana",
+                "uid": "-- Grafana --"
+              },
+              "enable": true,
+              "hide": true,
+              "iconColor": "rgba(0, 211, 255, 1)",
+              "name": "Annotations & Alerts",
+              "targetBlank": false,
+              "type": "dashboard"
+            }
+          ]
+        },
+        "editable": true,
+        "fiscalYearStartMonth": 0,
+        "graphTooltip": 0,
+        "id": null,
+        "links": [],
+        "liveNow": false,
+        "panels": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "drawStyle": "line",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "showPoints": "auto",
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  }
+                }
+              }
+            },
+            "targets": [
+              {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "Prometheus"
+                },
+                "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                "legendFormat": "{{instance}}",
+                "range": true
+              }
+            ],
+            "title": "CPU Usage",
+            "type": "timeseries"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "drawStyle": "line",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "showPoints": "auto",
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  }
+                }
+              }
+            },
+            "targets": [
+              {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "Prometheus"
+                },
+                "expr": "100 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100)",
+                "legendFormat": "{{instance}}",
+                "range": true
+              }
+            ],
+            "title": "Memory Usage",
+            "type": "timeseries"
+          }
+        ],
+        "refresh": "30s",
+        "schemaVersion": 38,
+        "style": "dark",
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        },
+        "title": "VM Monitoring",
+        "uid": "vm-monitoring",
+        "version": 1,
+        "weekStart": ""  # <-- This was missing before, now it's included!
+      }
+
+# --- Automatic Updates (Optional) ---
+runcmd:
+  - systemctl enable prometheus node-exporter grafana  # Optional: For Grafana
+  - systemctl start prometheus node-exporter grafana  # Optional: For Grafana
+  - (crontab -l ; echo "5 * * * * apt update && apt upgrade -y && apt autoremove -y") | crontab -  # Patch hourly
